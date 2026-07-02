@@ -10,7 +10,15 @@ I used an AI assistant mostly as a **reading buddy** to help me understand code 
 - **Traced how features work end to end.** I asked it to follow two features step by step: (1) what happens when someone adds a song to a playlist, and (2) what happens when someone listens to a song. The "how it works" sections below come from those traces.
 - **Clarified concepts I wasn't sure about**, like how Python numbers the days of the week, and why a database "join" can accidentally return the same item more than once.
 
-**Where I double-checked or corrected the AI:** *(Fill this in as you go. Be honest — e.g. "Before trusting any explanation, I reproduced each bug myself by running the tests / opening the page in my browser," or "The AI pointed me to the right file, but I confirmed the exact line causing the bug by reading it myself.")*
+**Where I double-checked or corrected the AI:**
+I treated the AI's explanations as a starting point and confirmed every bug myself before trusting it. For the streak and playlist bugs I ran the existing test suites (`pytest`) and watched the specific test go from failing to passing. For the feed and notification bugs I reproduced them by hand in `flask shell`, calling the service functions directly and checking the before/after results — for example, picking a specific user (darius) whose friends' listen times sat on either side of the "recent" window so the feed bug would actually show.
+
+A few things the AI did *not* predict, which I only caught by running the code:
+- On the feed fix, my first attempt still showed the bug because the unit was wrong — I had changed the number but left it as `hours` instead of `minutes`. Reading the actual output (not the explanation) is what caught it.
+- The `flask shell` doesn't reload a service file after you edit it — I had to fully restart the shell to see my changes take effect.
+- My virtual environment didn't actually have the dependencies installed (they were in system Python), which only surfaced when `python seed_data.py` failed — I fixed it with `pip install -r requirements.txt` inside the venv.
+
+So the AI was most useful for *reading and orienting*, but I verified each diagnosis and fix by running the tests or the code myself.
 
 ---
 
@@ -149,6 +157,22 @@ Notifications for a rating were never created because `rate_song` was missing th
 
 **My fix and side-effect check:**
 I added a notification step to `rate_song` that mirrors the working playlist code: after the rating is saved, if the person rating isn't the person who shared the song, it creates a `song_rated` notification for the sharer ("So-and-so rated your song 'X' N stars"). I kept the same "don't notify yourself" guard the playlist code uses. Design choice: I notify on every rating submission (matching the proven playlist pattern) rather than only on brand-new ratings. I verified in a fresh shell: darius rating nova's song raised her notification count from 1 to 2, the new notification was the correct `song_rated` type addressed to nova, and a user rating *their own* song created no notification (the guard works). I didn't change how ratings are saved, so existing rating behavior is untouched.
+
+---
+
+### Issue #5 — The last song in a playlist never shows up (stretch)
+
+**How I reproduced it:**
+I ran the app's playlist tests with `pytest tests/test_playlists.py -v`. The test `test_playlist_returns_all_songs` builds a playlist with 5 songs and expects `get_playlist_songs` to return 5, but it returned 4 — the final song was missing. The other tests confirmed the songs that *were* returned came back in the right order, so nothing was scrambled; one song at the end was simply being dropped.
+
+**How I found the root cause:**
+I opened `services/playlist_service.py` and read `get_playlist_songs` from top to bottom. The database query itself was correct — it fetches every song in the playlist and sorts them by their position number. But the very last line, which turns those songs into the final list, ended with `songs[:-1]`. In Python, `[:-1]` means "everything except the last item." So after correctly fetching all the songs in order, the code deliberately chopped off the last one right before returning. The function's own description even says it returns *all* songs, so the code contradicted its own documentation — that mismatch is what confirmed it.
+
+**The root cause:**
+The final list was built with `songs[:-1]`, which excludes the last element. Because the songs are sorted by position, "the last element" is always the last song in the playlist — so the highest-positioned song was always thrown away. This is a classic off-by-one error: a 5-song playlist showed 4, a 7-song playlist showed 6, and so on.
+
+**My fix and side-effect check:**
+I removed the `[:-1]` so the function returns the full list of songs. I re-ran `pytest tests/test_playlists.py -v` and all 3 tests pass: the playlist now returns all 5 songs, still in correct position order, and — the important boundary case — an empty playlist still returns an empty list without error (the old `[:-1]` happened to work on an empty list too, so I confirmed I didn't break that edge case).
 
 ---
 
