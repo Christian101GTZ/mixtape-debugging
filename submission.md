@@ -122,10 +122,13 @@ nova   -> 2026-07-01T20:09:...
 ```
 
 **How I found the root cause:**
+I opened `services/feed_service.py`, the file behind the feed. Right at the top it defines a setting called `RECENT_THRESHOLD` — the "how recent counts as *now*" window — and it was set to **24 hours**. The rest of the function was fine: it correctly grabs a friend's most recent listen and lists each friend once. The only thing deciding who counts as "listening now" was that one setting, and 24 hours is clearly far too long for "now." That single line matched the complaint exactly, which is how I knew it was the real cause.
 
 **The root cause:**
+The "listening now" feed treats anyone who listened within the last **24 hours** as currently listening, because the recency window was set to 24 hours. "Listening now" is supposed to mean the last several minutes, so friends who listened hours ago — even the night before — kept showing up as if they were playing music right now. That's the "shows people from yesterday" complaint.
 
 **My fix and side-effect check:**
+I changed the window from 24 hours to **30 minutes** (`timedelta(minutes=30)`), which matches how the seed data is built — one friend listening ~15 minutes ago (genuinely now) and another ~2 hours ago (not now). After re-seeding the data and restarting the shell, the feed for darius returned only **simone** (~15 min ago) and correctly dropped **nova** (~2 hours ago). Because this is a boundary bug, I checked both sides of the 30-minute line: the recent friend still appears, the older one no longer does. I also confirmed I only touched the "listening now" feed — the separate activity feed (`get_activity_feed`) is intentionally *not* time-filtered, and I left it alone.
 
 ---
 
