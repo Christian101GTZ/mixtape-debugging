@@ -142,10 +142,13 @@ Song rated: Midnight Drive | BEFORE: 1 | AFTER: 1 | new notif? False
 ```
 
 **How I found the root cause:**
+The brief hinted this was "architectural, not a typo," so instead of hunting for a broken line I compared the two interactions side by side in `services/notification_service.py`. The function that adds a song to a playlist (`add_to_playlist`) does its main job and then has a clear block that says "if you weren't the one who shared this song, notify the original sharer." I then read the rating function (`rate_song`) and it had no such block at all — it saved the rating and returned. The notification step wasn't broken; it was simply never written. Comparing the working path to the missing one is what made it obvious.
 
 **The root cause:**
+Notifications for a rating were never created because `rate_song` was missing the "notify the sharer" step entirely. The playlist path had it; the rating path did not. So a user got an alert when a friend added their song to a playlist, but rating produced silence — not because of a bug in the notification code, but because that code was never called from the rating flow.
 
 **My fix and side-effect check:**
+I added a notification step to `rate_song` that mirrors the working playlist code: after the rating is saved, if the person rating isn't the person who shared the song, it creates a `song_rated` notification for the sharer ("So-and-so rated your song 'X' N stars"). I kept the same "don't notify yourself" guard the playlist code uses. Design choice: I notify on every rating submission (matching the proven playlist pattern) rather than only on brand-new ratings. I verified in a fresh shell: darius rating nova's song raised her notification count from 1 to 2, the new notification was the correct `song_rated` type addressed to nova, and a user rating *their own* song created no notification (the guard works). I didn't change how ratings are saved, so existing rating behavior is untouched.
 
 ---
 
