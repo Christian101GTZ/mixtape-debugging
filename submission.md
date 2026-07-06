@@ -2,7 +2,6 @@
 
 ## AI Usage
 
-*(How I used AI tools while exploring and debugging the code — not just for writing code. Edit this to match what you actually did.)*
 
 I used an AI assistant mostly as a **reading buddy** to help me understand code someone else wrote. Following the patterns suggested in the project brief, I:
 
@@ -178,4 +177,6 @@ I removed the `[:-1]` so the function returns the full list of songs. I re-ran `
 
 ## git log screenshot
 
-*(Paste my `git log --oneline` screenshot from the `bugfix/mixtape` branch here before submitting.)*
+`git log --oneline` on the `bugfix/mixtape` branch, showing one separate `fix:` commit per bug:
+
+![git log --oneline showing one commit per bug fix on bugfix/mixtape](assets/Screenshot%202026-07-01%20214835.png)
